@@ -26,14 +26,13 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
 {
   lib,
   cargo-pgrx,
   pkg-config,
   rustPlatform,
   stdenv,
-  Security,
+  darwin,
   writeShellScriptBin,
 }:
 
@@ -94,7 +93,13 @@ let
     export PGRX_HOME=$(mktemp -d)
     export PGDATA="$PGRX_HOME/data-${pgrxPostgresMajor}/"
     cargo-pgrx pgrx init "--pg${pgrxPostgresMajor}" ${lib.getDev postgresql}/bin/pg_config
-    echo "unix_socket_directories = '$(mktemp -d)'" > "$PGDATA/postgresql.conf"
+
+    # unix sockets work in sandbox, too.
+    export PGHOST="$(mktemp -d)"
+    cat > "$PGDATA/postgresql.conf" <<EOF
+    listen_addresses = '''
+    unix_socket_directories = '$PGHOST'
+    EOF
 
     # This is primarily for Mac or other Nix systems that don't use the nixbld user.
     export USER="$(whoami)"
@@ -112,7 +117,9 @@ let
   # so we don't accidentally `(rustPlatform.buildRustPackage argsForBuildRustPackage) // { ... }` because
   # we forgot parentheses
   finalArgs = argsForBuildRustPackage // {
-    buildInputs = (args.buildInputs or [ ]) ++ lib.optionals stdenv.hostPlatform.isDarwin [ Security ];
+    buildInputs =
+      (args.buildInputs or [ ])
+      ++ lib.optionals stdenv.hostPlatform.isDarwin [ darwin.apple_sdk.frameworks.Security ];
 
     nativeBuildInputs =
       (args.nativeBuildInputs or [ ])
@@ -156,6 +163,7 @@ let
       cargo-pgrx pgrx stop all
 
       mv $out/${postgresql}/* $out
+      mv $out/${postgresql.lib}/* $out
       rm -rf $out/nix
 
       ${maybeLeaveBuildAndTestSubdir}

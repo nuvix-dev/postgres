@@ -9,12 +9,11 @@ import socket
 from ec2instanceconnectcli.EC2InstanceConnectLogger import EC2InstanceConnectLogger
 from ec2instanceconnectcli.EC2InstanceConnectKey import EC2InstanceConnectKey
 from time import sleep
-import subprocess
 import paramiko
 
-# if GITHUB_RUN_ID is not set, use a default value that includes the user and hostname
+# if EXECUTION_ID is not set, use a default value that includes the user and hostname
 RUN_ID = os.environ.get(
-    "GITHUB_RUN_ID",
+    "EXECUTION_ID",
     "unknown-ci-run-"
     + os.environ.get("USER", "unknown-user")
     + "@"
@@ -206,9 +205,9 @@ def get_ssh_connection(instance_ip, ssh_identity_file, max_retries=10):
             sleep(5)
 
 
-def run_ssh_command(ssh, command):
+def run_ssh_command(ssh, command, timeout=None):
     """Run a command over the established SSH connection."""
-    stdin, stdout, stderr = ssh.exec_command(command)
+    stdin, stdout, stderr = ssh.exec_command(command, timeout=timeout)
     exit_code = stdout.channel.recv_exit_status()
     return {
         'succeeded': exit_code == 0,
@@ -232,6 +231,10 @@ def host():
 
     def gzip_then_base64_encode(s: str) -> str:
         return base64.b64encode(gzip.compress(s.encode())).decode()
+
+    # Create temporary SSH key pair
+    ec2logger = EC2InstanceConnectLogger(debug=False)
+    temp_key = EC2InstanceConnectKey(ec2logger.get_logger())
 
     instance = list(
         ec2.create_instances(
@@ -279,6 +282,10 @@ runcmd:
     - 'bash init.sh "staging"'
     - 'touch /var/lib/init-complete'
     - 'rm -rf /tmp/*'
+users:
+  - name: ubuntu
+    ssh_authorized_keys:
+      - {temp_key.get_pub_key()}
 """,
             TagSpecifications=[
                 {
@@ -296,16 +303,6 @@ runcmd:
 
     # Increase wait time before starting health checks
     sleep(30)  # Wait for 30 seconds to allow services to start
-
-    ec2logger = EC2InstanceConnectLogger(debug=False)
-    temp_key = EC2InstanceConnectKey(ec2logger.get_logger())
-    ec2ic = boto3.client("ec2-instance-connect", region_name="ap-southeast-1")
-    response = ec2ic.send_ssh_public_key(
-        InstanceId=instance.id,
-        InstanceOSUser="ubuntu",
-        SSHPublicKey=temp_key.get_pub_key(),
-    )
-    assert response["Success"]
 
     # Wait for instance to have public IP
     while not instance.public_ip_address:
@@ -333,7 +330,7 @@ runcmd:
     attempt = 0
     while attempt < max_attempts:
         try:
-            result = run_ssh_command(ssh, "test -f /var/lib/init-complete")
+            result = run_ssh_command(ssh, "test -f /var/lib/init-complete", timeout=5)
             if result['succeeded']:
                 logger.info("init.sh has completed")
                 break

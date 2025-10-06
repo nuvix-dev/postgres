@@ -278,6 +278,15 @@
       "hash": "sha256-Cpi2iASi1QJoED0Qs1dANqg/BNZTsz5S+pw8iYyW03Y="
     }
   },
+  "pgrouting": {
+    "3.4.1": {
+      "postgresql": [
+        "15",
+        "17"
+      ],
+      "hash": "sha256-QC77AnPGpPQGEWi6JtJdiNsB2su5+aV2pKg5ImR2B0k="
+    }
+  },
   "pgsodium": {
     "3.0.4": {
       "postgresql": [

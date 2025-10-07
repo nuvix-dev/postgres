@@ -196,6 +196,7 @@ builtins.listToAttrs (
       "pg_cron"
       "pg_graphql"
       "pg_net"
+      "pgmq"
       "vector"
       "wrappers"
     ]

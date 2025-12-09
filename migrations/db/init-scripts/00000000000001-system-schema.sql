@@ -536,171 +536,181 @@ DROP EVENT TRIGGER IF EXISTS ON_MANAGED_TABLE_CREATE;
 CREATE EVENT TRIGGER ON_MANAGED_TABLE_CREATE ON DDL_COMMAND_END WHEN TAG IN ('CREATE TABLE')
 EXECUTE FUNCTION SYSTEM.ON_MANAGED_TABLE_CREATE ();
 
-CREATE OR REPLACE FUNCTION SYSTEM.ON_MANAGED_TABLE_ALTER () RETURNS EVENT_TRIGGER SECURITY DEFINER
-SET
-	SEARCH_PATH = SYSTEM,
-	PG_CATALOG AS $$
+CREATE OR REPLACE FUNCTION system.on_managed_table_alter()
+RETURNS event_trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = system, pg_catalog
+AS $$
 DECLARE
-    r RECORD;
-    schema_info RECORD;
-    table_info RECORD;
-    old_table_name text;
-    new_table_name text;
-    is_rename_operation boolean;
-	is_rename_table boolean;
-	is_rename_column boolean;
-    current_sql text;
-	normalized_sql text;
-    schema_type text;
-    is_perms_table boolean := false;
-    base_table_name text;
-    has_id_column boolean;
+    cmd RECORD;
+    tbl RECORD;
+    schema_rec RECORD;
+
+    base_oid OID;
+    perms_oid OID;
+    target_is_perms BOOLEAN := FALSE;
+    target_is_managed BOOLEAN := FALSE;
+
+    -- catalog values after the DDL (available because DDL_COMMAND_END)
+    relname_after TEXT;
+    nspname_after TEXT;
+    id_column_exists BOOLEAN;
 BEGIN
-    current_sql := current_query();
-	normalized_sql := regexp_replace(current_sql, '/\*.*?\*/', '', 'gs');
-	normalized_sql := regexp_replace(normalized_sql, '--.*$', '', 'gm');
-	normalized_sql := regexp_replace(normalized_sql, '''([^'']|'''')*''', '', 'g');
-	normalized_sql := regexp_replace(normalized_sql, '[[:space:]]+', ' ', 'g');
-	normalized_sql := trim(normalized_sql);
-	
-	is_rename_table := normalized_sql ~* '^ALTER\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:ONLY\s+)?(?:\S+\.)?\S+(?:\s*\*)?\s+RENAME\s+TO\s+\S+';
-	is_rename_column := normalized_sql ~* '^ALTER\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:ONLY\s+)?(?:\S+\.)?\S+(?:\s*\*)?\s+RENAME(?:\s+COLUMN)?\s+\S+\s+TO\s+\S+';
-	is_rename_operation := is_rename_table OR is_rename_column;
-	
-    FOR r IN SELECT * FROM pg_event_trigger_ddl_commands() 
-    WHERE command_tag = 'ALTER TABLE'
-    LOOP
-        -- Check if schema is managed
-        SELECT s.type INTO schema_type
-        FROM system.schemas s
-        WHERE s.name = r.schema_name 
-        AND s.enabled = true;
+    -- Iterate affected commands (only those with tag ALTER TABLE since trigger created with TAG IN ('ALTER TABLE'))
+    FOR cmd IN SELECT * FROM pg_event_trigger_ddl_commands() LOOP
 
-        -- Skip if schema is not found
-        IF NOT FOUND THEN
+        -- cmd.objid is the OID of the relation (table) targeted by the ALTER TABLE
+        IF cmd.objid IS NULL THEN
+            -- Nothing we can do (could be statements not tied to a single oid)
             CONTINUE;
         END IF;
 
-        -- Get the new table name from the object identity
-        new_table_name := split_part(r.object_identity, '.', 2);
-
-        -- Skip if schema is not managed
-        IF schema_type != 'managed' THEN
-            CONTINUE;
-        END IF;
-
-        -- Check if this is a _perms table by looking for base table reference
-        SELECT t.*, s.type as schema_type INTO table_info
+        -- Find if this oid corresponds to a managed table's base or perms table.
+        -- First, look for a match on perms_oid (someone targeting the perms table)
+        SELECT t.*, s.name AS schema_name, s.type AS schema_type
+        INTO tbl
         FROM system.tables t
         JOIN system.schemas s ON t.schema_id = s.id
-        WHERE t.perms_oid = r.objid;
+        WHERE t.perms_oid = cmd.objid
+        LIMIT 1;
 
         IF FOUND THEN
-            -- This is a _perms table being altered
-            is_perms_table := true;
-            base_table_name := table_info.name;
+            target_is_perms := TRUE;
+            base_oid := tbl.oid;        -- base table oid (for reference)
+            perms_oid := tbl.perms_oid; -- equals cmd.objid
+            target_is_managed := (tbl.schema_type = 'managed');
         ELSE
-            -- Check if it's a base table
-            SELECT t.*, s.type as schema_type INTO table_info
+            -- Not perms; check if it's a base table
+            SELECT t.*, s.name AS schema_name, s.type AS schema_type, s.enabled AS schema_enabled
+            INTO tbl
             FROM system.tables t
             JOIN system.schemas s ON t.schema_id = s.id
-            WHERE t.oid = r.objid;
-            
-            -- Skip if table not found in system.tables
-            IF NOT FOUND THEN
+            WHERE t.oid = cmd.objid
+            LIMIT 1;
+
+            IF FOUND THEN
+                target_is_perms := FALSE;
+                base_oid := tbl.oid;
+                perms_oid := tbl.perms_oid;
+                target_is_managed := (tbl.schema_type = 'managed');
+            ELSE
+                -- Not in system.tables, ignore (not a managed table)
                 CONTINUE;
             END IF;
-            is_perms_table := false;
         END IF;
 
-        -- STEP 1: Handle RENAME operations
-        IF is_rename_table THEN
-            -- Case 1: Someone is trying to rename a _perms table directly
-            IF is_perms_table THEN
-                -- Always revert perms table renames - they should follow base table
-				IF new_table_name = table_info.name || '_perms' THEN
-				    CONTINUE;
-				END IF;
-                RAISE EXCEPTION 
-                    'Permission denied: Cannot rename _perms table %.% directly. '
-                    'Rename the main table %.% instead.',
-                    r.schema_name, new_table_name,
-                    r.schema_name, base_table_name;
-            
-            -- Case 2: Normal base table rename
+        -- If schema not enabled or not managed, skip
+        IF NOT target_is_managed THEN
+            CONTINUE;
+        END IF;
+
+        -- Now inspect the catalog state AFTER the DDL (trigger is DDL_COMMAND_END)
+        SELECT c.relname, n.nspname
+        INTO relname_after, nspname_after
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.oid = cmd.objid
+        LIMIT 1;
+
+        -- If relname_after is null, the table no longer exists (e.g., DROP followed by CREATE?), treat defensively
+        IF relname_after IS NULL THEN
+            RAISE EXCEPTION 'Managed table %.% seems to be dropped or inaccessible as part of the DDL. This operation is not allowed.',
+                tbl.schema_name, tbl.name;
+        END IF;
+
+        /*
+         * CASE A: Target is the _perms table -> always block direct ALTERs to perms table
+         * Reason: perms table schema and behavior must be controlled by Nuvix, not by users.
+         * We allow perms table renaming *only* when the base table rename happens (handled below).
+         */
+        IF target_is_perms THEN
+			IF relname_after = tbl.name || '_perms' THEN
+				CONTINUE;
+			END IF;
+            -- Abort the transaction
+            RAISE EXCEPTION 'Permission denied: Direct alterations to _perms table %.% are not allowed. Alter the main table instead.',
+                nspname_after, relname_after;
+        END IF;
+
+        /*
+         * CASE B: Target is a base managed table.
+         * - Detect if the base table was renamed (catalog relname differs from stored metadata)
+         * - Detect if _id column was removed/renamed (check if _id exists now)
+         * - Update metadata and propagate rename to perms table if required
+         */
+
+        -- 1) Check whether the table's current catalog name differs from stored metadata
+        IF relname_after IS DISTINCT FROM tbl.name THEN
+            -- Prevent members from creating names that end with _perms
+            IF relname_after ILIKE '%_perms' THEN
+                RAISE EXCEPTION 'Invalid table name: Using the `_perms` suffix is reserved in managed schemas.';
+            END IF;
+
+            -- Rename was performed on the base table. Update metadata and rename perms table if we track one.
+            UPDATE system.tables
+            SET name = relname_after, updated_at = now()
+            WHERE id = tbl.id;
+
+            -- If we have a perms_oid, rename the perms table to newname_perms
+            IF tbl.perms_oid IS NOT NULL THEN
+                -- get current perms schema and current perms relname (should exist)
+                PERFORM 1 FROM pg_class WHERE oid = tbl.perms_oid;
+                IF FOUND THEN
+                    -- rename the perms table by OID -> find its namespace
+                    DECLARE
+                        perms_nsp TEXT;
+                        perms_rel TEXT;
+                        target_perms_new TEXT;
+                        perms_schema_oid OID;
+                    BEGIN
+                        SELECT n.nspname, c.relname, n.oid
+                        INTO perms_nsp, perms_rel, perms_schema_oid
+                        FROM pg_class c
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE c.oid = tbl.perms_oid
+                        LIMIT 1;
+
+                        -- Build final target perms name (new base name + '_perms')
+                        target_perms_new := relname_after || '_perms';
+
+                        -- Execute rename using schema and current perms name (safe quoting)
+                        EXECUTE format('ALTER TABLE %I.%I RENAME TO %I', perms_nsp, perms_rel, target_perms_new);
+
+                        -- We do NOT update system.tables.perms_oid (the OID stays the same).
+                    END;
+                ELSE
+                    -- perms oid points to missing object; just warn by logging or update metadata
+                    RAISE NOTICE 'Managed table % has perms_oid set but perms relation oid % does not exist; metadata may be inconsistent.',
+                        tbl.name, tbl.perms_oid;
+                END IF;
+            END IF;
+        END IF;
+
+        -- 2) Check that the protected _id column still exists after the DDL.
+        -- If it doesn't, abort unless current_user = nuvix_admin AND system.allow_alter_id = 'true'
+        SELECT EXISTS (
+            SELECT 1 FROM pg_attribute a
+            WHERE a.attrelid = base_oid
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+              AND a.attname = '_id'
+        ) INTO id_column_exists;
+
+        IF NOT id_column_exists THEN
+            -- allow override for nuvix_admin + specific setting
+            IF current_user = 'nuvix_admin' AND COALESCE(current_setting('system.allow_alter_id', TRUE), 'false') = 'true' THEN
+                -- allowed; optionally log
+                RAISE NOTICE 'nuvix_admin altered _id on managed table %.% while system.allow_alter_id = true', tbl.schema_name, relname_after;
             ELSE
-                old_table_name := table_info.name;
-                
-                -- Check if names are different (actual rename occurred)
-                IF old_table_name != new_table_name THEN
-					IF new_table_name ILIKE '%_perms' THEN 
-					    RAISE EXCEPTION 'Cannot use `_perms` suffix for tables in managed schema.';
-					END IF;
-					
-                    -- Update the table name in metadata
-                    UPDATE system.tables 
-                    SET name = new_table_name, 
-                        updated_at = now()
-                    WHERE oid = r.objid;
-                    
-                    -- Rename the associated _perms table if it exists
-                    IF table_info.perms_oid IS NOT NULL THEN
-                        EXECUTE format(
-                            'ALTER TABLE %I.%I RENAME TO %I',
-                            r.schema_name,
-                            old_table_name || '_perms',
-                            new_table_name || '_perms'
-                        );
-                    END IF;
-                END IF;
-            END IF;
-        END IF;
-
-        -- STEP 2: Block altering _id columns in managed tables
-	    IF NOT is_perms_table THEN
-           -- Allow nuvix_admin with setting flag
-            IF current_user != 'nuvix_admin' OR 
-            NOT COALESCE(current_setting('system.allow_alter_id', true) = 'true', false) THEN
-                -- Check for DROP COLUMN _id or ALTER COLUMN _id
-                IF normalized_sql ~* '\yDROP\s+COLUMN\s+(IF\s+EXISTS\s+)?(\y_id\y|"_id")' OR
-                   normalized_sql ~* '\yALTER\s+COLUMN\s+(\y_id\y|"_id")' THEN
-                    RAISE EXCEPTION 'Permission denied: Cannot alter or drop _id column in managed table %.%', r.schema_name, table_info.name;
-                END IF;
-            END IF;
-
-            -- Block renaming of _id columns
-            IF is_rename_column THEN 
-                SELECT EXISTS (
-                    SELECT 1 
-                    FROM pg_attribute attr
-                    JOIN pg_class cls ON cls.oid = attr.attrelid
-                    JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
-                    WHERE nsp.nspname = r.schema_name
-                      AND cls.oid = r.objid
-                      AND attr.attname = '_id'
-                ) INTO has_id_column;
-
-                IF NOT has_id_column THEN
-                    RAISE EXCEPTION 
-                        'Permission denied: Cannot rename _id column in managed table %.%',
-                        r.schema_name, table_info.name;
-                END IF;
-            END IF;
-        END IF;
-
-        -- STEP 3: Block direct alterations to _perms tables
-        -- Allow only RENAME TABLE, but block renames of columns too
-        IF is_perms_table THEN
-            IF NOT is_rename_table OR is_rename_column THEN
-                RAISE EXCEPTION 
-                    'Permission denied: Cannot directly alter _perms table %.%.',
-                    r.schema_name, new_table_name;
+                RAISE EXCEPTION 'Permission denied: Cannot drop or rename the protected _id column on managed table %.%.',
+                    tbl.schema_name, relname_after;
             END IF;
         END IF;
 
     END LOOP;
 END;
-$$ LANGUAGE PLPGSQL;
+$$;
 
 DROP EVENT TRIGGER IF EXISTS ON_MANAGED_TABLE_ALTER;
 

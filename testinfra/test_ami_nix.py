@@ -10,6 +10,7 @@ from ec2instanceconnectcli.EC2InstanceConnectLogger import EC2InstanceConnectLog
 from ec2instanceconnectcli.EC2InstanceConnectKey import EC2InstanceConnectKey
 from time import sleep
 import paramiko
+from pathlib import Path
 
 # if EXECUTION_ID is not set, use a default value that includes the user and hostname
 RUN_ID = os.environ.get(
@@ -217,6 +218,16 @@ def run_ssh_command(ssh, command, timeout=None):
         "stdout": stdout.read().decode(),
         "stderr": stderr.read().decode(),
     }
+
+
+def upload_file_via_sftp(ssh, local_path, remote_path):
+    """Upload a file to the remote host via SFTP."""
+    sftp = ssh.open_sftp()
+    try:
+        sftp.put(local_path, remote_path)
+        logger.info(f"Uploaded {local_path} to {remote_path}")
+    finally:
+        sftp.close()
 
 
 # scope='session' uses the same container for all the tests;

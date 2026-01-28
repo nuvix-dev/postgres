@@ -166,3 +166,6 @@ self.inputs.nixpkgs.lib.nixos.runTest {
       check_upgrade_path("17")
     '';
 }
+# We don't use the generic test for this extension because:
+# http is not using semver versioning scheme, so we need to adapt the version checks
+# otherwise the test fails with ERROR:  extension "http" has no installation script nor update path for version "1.5.0"

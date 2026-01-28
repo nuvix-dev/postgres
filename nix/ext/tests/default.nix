@@ -215,13 +215,26 @@ let
               ""
           }
 
+          has_update_script = False
           with subtest("switch to postgresql 17"):
             server.succeed(
               f"{pg17_configuration}/bin/switch-to-configuration test >&2"
             )
+            server.wait_for_unit("postgresql.service")
+            has_update_script = server.succeed(
+              "test -f /var/lib/postgresql/update_extensions.sql && echo 'yes' || echo 'no'"
+            ).strip() == "yes"
+            if has_update_script:
+              # Run the extension update script generated during the upgrade
+              test.run_sql_file("/var/lib/postgresql/update_extensions.sql")
 
           with subtest("Check last version of the extension after postgresql upgrade"):
-            test.assert_version_matches(last_version)
+            if has_update_script:
+              # If there was an update script, the last version should be installed
+              test.assert_version_matches(versions["17"][-1])
+            else:
+              # Otherwise, the version should match the last version from postgresql 15
+              test.assert_version_matches(last_version)
 
           ${
             if support_upgrade then
@@ -271,11 +284,12 @@ builtins.listToAttrs (
       "pg_hashids"
       "pg_jsonschema"
       "pg_net"
+      "pg_partman"
       "pg_repack"
       "pg_stat_monitor"
       "pg_tle"
       "pgaudit"
-      "pg_partman"
+      "postgis"
       "vector"
       "wal2json"
       "wrappers"

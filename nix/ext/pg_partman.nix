@@ -59,7 +59,11 @@ let
     _: value: builtins.elem (lib.versions.major postgresql.version) value.postgresql
   ) allVersions;
   versions = lib.naturalSort (lib.attrNames supportedVersions);
-  latestVersion = lib.last versions;
+  latestVersion =
+    assert lib.assertMsg (
+      versions != [ ]
+    ) "${pname}: no supported versions for PostgreSQL ${lib.versions.major postgresql.version}";
+    lib.last versions;
   numberOfVersions = builtins.length versions;
   packages = builtins.attrValues (
     lib.mapAttrs (name: value: build name value.hash) supportedVersions

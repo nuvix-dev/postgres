@@ -75,12 +75,15 @@ get_version_info() {
         Dockerfile-17)
             echo "17 5435"
             ;;
+        Dockerfile-18)
+            echo "18 5438"
+            ;;
         Dockerfile-orioledb-17)
             echo "orioledb-17 5437"
             ;;
         *)
             log_error "Unknown Dockerfile: $dockerfile"
-            log_error "Supported: Dockerfile-15, Dockerfile-17, Dockerfile-orioledb-17"
+            log_error "Supported: Dockerfile-15, Dockerfile-17, Dockerfile-18, Dockerfile-orioledb-17"
             exit 1
             ;;
     esac

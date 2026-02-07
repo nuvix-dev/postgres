@@ -23,7 +23,11 @@ let
   allVersionsList = lib.naturalSort (lib.attrNames allVersions);
   # Supported versions sorted (for libraries)
   versions = lib.naturalSort (lib.attrNames supportedVersions);
-  latestVersion = lib.last versions;
+  latestVersion =
+    assert lib.assertMsg (
+      versions != [ ]
+    ) "${pname}: no supported versions for PostgreSQL ${lib.versions.major postgresql.version}";
+    lib.last versions;
   numberOfVersions = builtins.length versions;
 
   # Build packages only for supported versions (with libraries)

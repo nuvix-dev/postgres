@@ -77,6 +77,15 @@ let
         sed -e "/^default_version =/d" \
             -e "s|^module_pathname = .*|module_pathname = '\$libdir/${pname}'|" \
           ${pname}.control > $out/share/postgresql/extension/${pname}--${version}.control
+
+        # For the latest version, create default control file and symlink
+        if [[ "${version}" == "${latestVersion}" ]]; then
+          {
+            echo "default_version = '${version}'"
+            cat $out/share/postgresql/extension/${pname}--${version}.control
+          } > $out/share/postgresql/extension/${pname}.control
+          ln -sfn ${pname}-${version}${postgresql.dlSuffix} $out/lib/${pname}${postgresql.dlSuffix}
+        fi
       '';
 
       meta = with lib; {
@@ -110,21 +119,24 @@ in
 pkgs.buildEnv {
   name = pname;
   paths = packages;
+
+  pathsToLink = [
+    "/lib"
+    "/share/postgresql/extension"
+  ];
+
   nativeBuildInputs = [ makeWrapper ];
   postBuild = ''
-    {
-      echo "default_version = '${latestVersion}'"
-      cat $out/share/postgresql/extension/${pname}--${latestVersion}.control
-    } > $out/share/postgresql/extension/${pname}.control
-    ln -sfn ${pname}-${latestVersion}${postgresql.dlSuffix} $out/lib/${pname}${postgresql.dlSuffix}
+    # Verify all expected library files are present
+    expectedFiles=${toString (numberOfVersions + 1)}
+    actualFiles=$(ls -A $out/lib/${pname}*${postgresql.dlSuffix} | wc -l)
 
-
-    # checks
-    (set -x
-       test "$(ls -A $out/lib/${pname}*${postgresql.dlSuffix} | wc -l)" = "${
-         toString (numberOfVersions + 1)
-       }"
-    )
+    if [[ "$actualFiles" != "$expectedFiles" ]]; then
+      echo "Error: Expected $expectedFiles library files, found $actualFiles"
+      echo "Files found:"
+      ls -la $out/lib/${pname}*${postgresql.dlSuffix} || true
+      exit 1
+    fi
 
     makeWrapper ${lib.getExe switch-ext-version} $out/bin/switch_pg_net_version \
       --prefix EXT_WRAPPER : "$out" --prefix EXT_NAME : "${pname}"

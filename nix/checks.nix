@@ -27,8 +27,10 @@
           # deadnix: skip
           makeCheckHarness =
             pgpkg:
+            # legacyPkgName: the name used in legacyPackages (e.g., "psql_17" or "psql_17_slim")
             {
               isCliVariant ? false,
+              legacyPkgName ? null,
             }:
             let
               pg_prove = pkgs.perlPackages.TAPParserSourceHandlerpgTAP;
@@ -89,11 +91,23 @@
                 in
                 builtins.trace "Major version result: ${result}" result;
 
-              # Select the appropriate pgroonga package for this PostgreSQL version
-              pgroonga = self'.legacyPackages."psql_${majorVersion}".exts.pgroonga;
+              # Determine the legacy package name for selecting extensions
+              effectiveLegacyPkgName = if legacyPkgName != null then legacyPkgName else "psql_${majorVersion}";
 
+              # Select the appropriate pgroonga package for this PostgreSQL version
+              pgroonga = self'.legacyPackages.${effectiveLegacyPkgName}.exts.pgroonga;
+
+              # Use different ports to allow parallel test runs
+              # slim packages get their own ports to avoid conflicts
+              isSlim = lib.hasSuffix "_slim" effectiveLegacyPkgName;
               pgPort =
-                if (majorVersion == "17") then
+                if (majorVersion == "17" && isSlim) then
+                  "5538"
+                else if (majorVersion == "15" && isSlim) then
+                  "5539"
+                else if (majorVersion == "orioledb-17" && isSlim) then
+                  "5540"
+                else if (majorVersion == "17") then
                   "5535"
                 else if (majorVersion == "15") then
                   "5536"
@@ -444,6 +458,8 @@
                   CREATE TABLE IF NOT EXISTS test_config (key TEXT PRIMARY KEY, value TEXT);
                   INSERT INTO test_config (key, value) VALUES ('http_mock_port', '$HTTP_MOCK_PORT')
                   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+                  INSERT INTO test_config (key, value) VALUES ('http_mock_host', 'localhost')
+                  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
                 "
                 SORTED_DIR=$(mktemp -d)
                 for t in $(printf "%s\n" ${builtins.concatStringsSep " " sortedTestList}); do
@@ -497,6 +513,8 @@
                   CREATE TABLE IF NOT EXISTS test_config (key TEXT PRIMARY KEY, value TEXT);
                   INSERT INTO test_config (key, value) VALUES ('http_mock_port', '$HTTP_MOCK_PORT')
                   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+                  INSERT INTO test_config (key, value) VALUES ('http_mock_host', 'localhost')
+                  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
                 "
 
                 #shellcheck disable=SC2154
@@ -537,13 +555,28 @@
         in
         {
           psql_15 = pkgs.runCommand "run-check-harness-psql-15" { } (
-            lib.getExe (makeCheckHarness self'.packages."psql_15/bin" { })
+            lib.getExe (makeCheckHarness self'.packages."psql_15/bin" { legacyPkgName = "psql_15"; })
           );
           psql_17 = pkgs.runCommand "run-check-harness-psql-17" { } (
-            lib.getExe (makeCheckHarness self'.packages."psql_17/bin" { })
+            lib.getExe (makeCheckHarness self'.packages."psql_17/bin" { legacyPkgName = "psql_17"; })
           );
           psql_orioledb-17 = pkgs.runCommand "run-check-harness-psql-orioledb-17" { } (
-            lib.getExe (makeCheckHarness self'.packages."psql_orioledb-17/bin" { })
+            lib.getExe (
+              makeCheckHarness self'.packages."psql_orioledb-17/bin" { legacyPkgName = "psql_orioledb-17"; }
+            )
+          );
+          psql_15_slim = pkgs.runCommand "run-check-harness-psql-15-slim" { } (
+            lib.getExe (makeCheckHarness self'.packages."psql_15_slim/bin" { legacyPkgName = "psql_15_slim"; })
+          );
+          psql_17_slim = pkgs.runCommand "run-check-harness-psql-17-slim" { } (
+            lib.getExe (makeCheckHarness self'.packages."psql_17_slim/bin" { legacyPkgName = "psql_17_slim"; })
+          );
+          psql_orioledb-17_slim = pkgs.runCommand "run-check-harness-psql-orioledb-17-slim" { } (
+            lib.getExe (
+              makeCheckHarness self'.packages."psql_orioledb-17_slim/bin" {
+                legacyPkgName = "psql_orioledb-17_slim";
+              }
+            )
           );
           # CLI variant checks
           psql_17_cli = pkgs.runCommand "run-check-harness-psql-17-cli" { } (
@@ -837,10 +870,16 @@
                 touch $out
               '';
           inherit (self'.packages)
-            wal-g-2
-            pg_regress
+            cli-smoke-test
+            docker-image-inputs
+            docker-image-test
             goss
+            image-size-analyzer
+            pg_regress
+            pg-startup-profiler
+            supabase-cli
             supascan
+            wal-g-2
             ;
           devShell = self'.devShells.default;
         }

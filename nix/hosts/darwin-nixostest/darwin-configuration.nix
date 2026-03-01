@@ -76,9 +76,10 @@ in
     always-allow-substitutes = true;
     max-jobs = "auto";
     trusted-users = [ "@admin" ];
-    extra-substituters = [ "https://nix-postgres-artifacts.s3.amazonaws.com" ];
-    extra-trusted-substituters = [ "https://nix-postgres-artifacts.s3.amazonaws.com" ];
+    extra-substituters = [ "https://pub-aa815f1da11442fd9edb92952602bf56.r2.dev" "https://nix-postgres-artifacts.s3.amazonaws.com" ];
+    extra-trusted-substituters = [ "https://pub-aa815f1da11442fd9edb92952602bf56.r2.dev" "https://nix-postgres-artifacts.s3.amazonaws.com" ];
     extra-trusted-public-keys = [
+      "nuvix-cache:xgUMoDBFKzRx3murcFhpx607tZ6AnFgdb85FuFxmUFE="
       "nix-postgres-artifacts:dGZlQOvKcNEjvT7QEAJbcV6b6uk7VF/hWMjhYleiaLI="
     ];
   };

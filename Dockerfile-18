@@ -105,8 +105,8 @@ RUN adduser --system  --home /var/lib/postgresql --no-create-home --shell /bin/b
 RUN adduser --system  --no-create-home --shell /bin/bash --group  wal-g
 RUN cat <<EOF > /tmp/extra-nix.conf
 extra-experimental-features = nix-command flakes
-extra-substituters = https://nix-postgres-artifacts.s3.amazonaws.com
-extra-trusted-public-keys = nix-postgres-artifacts:dGZlQOvKcNEjvT7QEAJbcV6b6uk7VF/hWMjhYleiaLI=
+extra-substituters = https://pub-aa815f1da11442fd9edb92952602bf56.r2.dev https://nix-postgres-artifacts.s3.amazonaws.com
+extra-trusted-public-keys = nuvix-cache:xgUMoDBFKzRx3murcFhpx607tZ6AnFgdb85FuFxmUFE= nix-postgres-artifacts:dGZlQOvKcNEjvT7QEAJbcV6b6uk7VF/hWMjhYleiaLI=
 EOF
 RUN curl -L https://releases.nixos.org/nix/nix-2.33.1/install | sh -s -- --daemon --no-channel-add --yes --nix-extra-conf-file /tmp/extra-nix.conf
 

@@ -1,17 +1,19 @@
-# Getting Started with Supabase Postgres
+> **Notice:** This is a modified copy of [https://github.com/supabase/postgres](https://github.com/supabase/postgres)
 
-This guide covers getting up and running with Supabase Postgres. After reading this guide, you will understand:
+# Getting Started with Nuvix Postgres
 
-* What Supabase Postgres provides and why you might want to use it
+This guide covers getting up and running with Nuvix Postgres. After reading this guide, you will understand:
+
+* What Nuvix Postgres provides and why you might want to use it
 * How the project is organized and what each directory contains
 * How to build and run Postgres with extensions locally
 * The basics of working with the extension ecosystem
 
 ---
 
-## What is Supabase Postgres?
+## What is Nuvix Postgres?
 
-Supabase Postgres is a batteries-included PostgreSQL distribution that provides unmodified PostgreSQL with a curated set of the most useful extensions pre-installed. Think of it as PostgreSQL with superpowers - you get the reliability and power of standard PostgreSQL, plus immediate access to extensions for tasks like:
+Nuvix Postgres is a batteries-included PostgreSQL distribution that provides unmodified PostgreSQL with a curated set of the most useful extensions pre-installed. Think of it as PostgreSQL with superpowers - you get the reliability and power of standard PostgreSQL, plus immediate access to extensions for tasks like:
 
 * Full-text search and indexing
 * Geospatial data processing
@@ -25,7 +27,7 @@ The goal is simple: make it fast and easy to get started with a production-ready
 
 ## Philosophy
 
-Supabase Postgres follows these core principles:
+Nuvix Postgres follows these core principles:
 
 1. **Unmodified PostgreSQL** - We don't fork or modify PostgreSQL itself. You get standard PostgreSQL with extensions.
 2. **Curated Extensions** - We include well-maintained, production-tested extensions that solve real problems.
@@ -94,7 +96,7 @@ Here's a comprehensive overview of the project's directory structure:
 
 ### Extensions
 
-Extensions are the superpower of PostgreSQL. They add functionality without modifying the core database. Supabase Postgres includes dozens of pre-built extensions covering:
+Extensions are the superpower of PostgreSQL. They add functionality without modifying the core database. Nuvix Postgres includes dozens of pre-built extensions covering:
 
 * **Data Types & Validation** - pg_jsonschema, pg_hashids
 * **Search & Indexing** - pgroonga, rum, hypopg
@@ -162,12 +164,12 @@ docker build -f Dockerfile-17 -t supabase-postgres:17 .
 
 ## Next Steps
 
-Now that you understand the basics of Supabase Postgres:
+Now that you understand the basics of Nuvix Postgres:
 
-* Check the [Installation Guide](https://github.com/supabase/postgres/wiki) for deployment options
+* Check the [Installation Guide](https://github.com/nuvix-dev/postgres/wiki) for deployment options
 * Explore the [Extension Documentation](#) to learn about available extensions
 * Review [Contributing Guidelines](CONTRIBUTING.md) if you want to contribute
-* Join the [Supabase Community](https://github.com/supabase/postgres/discussions) for questions and discussions
+* Join the [Nuvix Community](https://github.com/nuvix-dev/postgres/discussions) for questions and discussions
 
 ## Getting Help
 
@@ -177,9 +179,6 @@ Now that you understand the basics of Supabase Postgres:
 * **Discord** - For real-time chat with the community
 
 ---
-
-This is the same PostgreSQL build that powers [Supabase](https://supabase.io), battle-tested in production by over one million projects.
-
 
 ## Primary Features
 - ✅ Postgres [postgresql-15.14](https://www.postgresql.org/docs/15/index.html)
@@ -300,43 +299,14 @@ This is the same PostgreSQL build that powers [Supabase](https://supabase.io), b
 
 ## Install
 
-See all installation instructions in the [repo wiki](https://github.com/supabase/postgres/wiki).
-
-[![Docker](https://github.com/supabase/postgres/blob/develop/docs/img/docker.png)](https://github.com/supabase/postgres/wiki/Docker)
-[![AWS](https://github.com/supabase/postgres/blob/develop/docs/img/aws.png)](https://github.com/supabase/postgres/wiki/AWS-EC2)
-
-<!-- ### Marketplace Images
-TODO: find way to automate this
-|   | Postgres & Extensions | PgBouncer | PostgREST | WAL-G |
-|---|:---:|:---:|:---:|:---:|
-| Supabase Postgres |  ✔️   | ❌    | ❌   |  ✔️   |
-| Supabase Postgres: PgBouncer Bundle  |  ✔️   |  ✔️  | ❌    |   ✔️ |
-| Supabase Postgres: PostgREST Bundle |  ✔️   |  ❌  |  ✔️   |   ✔️ |
-| Supabase Postgres: Complete Bundle |  ✔️  |  ✔️   | ✔️   | ✔️   |
-
-#### Availability
-|   | AWS ARM | AWS x86 | Digital Ocean x86 |
-|---|:---:|:---:|:---:|
-| Supabase Postgres | Coming Soon | Coming Soon | Coming Soon |
-| Supabase Postgres: PgBouncer Bundle  | Coming Soon | Coming Soon | Coming Soon |
-| Supabase Postgres: PostgREST Bundle | Coming Soon | Coming Soon | Coming Soon |
-| Supabase Postgres: Complete Bundle | Coming Soon | Coming Soon | Coming Soon |
-
-``` -->
+See all installation instructions in the [repo wiki](https://github.com/nuvix-dev/postgres/wiki).
 
 ## Motivation
 
 - Make it fast and simple to get started with Postgres.
 - Show off a few of Postgres' most exciting features.
-- This is the same build we offer at [Supabase](https://supabase.io).
 - Open a github issue if you have a feature request
 
 ## License
 
 [The PostgreSQL License](https://opensource.org/licenses/postgresql). We realize that licensing is tricky since we are bundling all the various plugins. If we have infringed on any license, let us know and we will make the necessary changes (or remove that extension from this repo).
-
-## Sponsors
-
-We are building the features of Firebase using enterprise-grade, open source products. We support existing communities wherever possible, and if the products don’t exist we build them and open source them ourselves.
-
-[![New Sponsor](https://user-images.githubusercontent.com/10214025/90518111-e74bbb00-e198-11ea-8f88-c9e3c1aa4b5b.png)](https://github.com/sponsors/supabase)

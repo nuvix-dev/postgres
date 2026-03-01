@@ -1,8 +1,12 @@
 {
   description = "Prototype tooling for deploying PostgreSQL";
   nixConfig = {
-    extra-substituters = [ "https://nix-postgres-artifacts.s3.amazonaws.com" ];
+    extra-substituters = [ 
+      "https://nuvix-postgres.e76b90d8f0a02889a2ed591e08279376.r2.cloudflarestorage.com"
+      "https://nix-postgres-artifacts.s3.amazonaws.com" 
+    ];
     extra-trusted-public-keys = [
+      "nuvix-cache:xgUMoDBFKzRx3murcFhpx607tZ6AnFgdb85FuFxmUFE="
       "nix-postgres-artifacts:dGZlQOvKcNEjvT7QEAJbcV6b6uk7VF/hWMjhYleiaLI="
     ];
   };

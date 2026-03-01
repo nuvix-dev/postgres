@@ -33,3 +33,7 @@ common-nix.vars.pkr.hcl
 nixos.qcow2
 .lsp
 .clj-kondo
+
+public-key.pem
+private-key.pem
+secret-key.pem

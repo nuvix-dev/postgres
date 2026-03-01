@@ -261,7 +261,7 @@ STOPSIGNAL SIGINT
 EXPOSE 5432
 
 ENV POSTGRES_HOST=/var/run/postgresql
-ENV POSTGRES_USER=supabase_admin
+ENV POSTGRES_USER=nuvix_admin
 ENV POSTGRES_DB=postgres
 ENV POSTGRES_INITDB_ARGS="--allow-group-access --locale-provider=icu --encoding=UTF-8 --icu-locale=en_US.UTF-8"
 RUN bash -c 'source /usr/local/bin/apt-update-fallback.sh && apt_update_with_fallback' && apt-get install -y --no-install-recommends \

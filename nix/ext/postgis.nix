@@ -16,7 +16,6 @@
   nixosTests,
   callPackage,
   buildEnv,
-  sfcgal,
 }:
 
 let
@@ -48,7 +47,6 @@ let
     "address_standardizer"
     "postgis"
     "postgis_raster"
-    "postgis_sfcgal"
     "postgis_topology"
   ];
 
@@ -82,7 +80,6 @@ let
         json_c
         protobufc
         pcre2.dev
-        sfcgal
       ]
       ++ lib.optional stdenv.isDarwin libiconv;
       nativeBuildInputs = [
@@ -95,7 +92,7 @@ let
 
       preConfigure = ''
         sed -i 's@/usr/bin/file@${file}/bin/file@' configure
-        configureFlags="--datadir=$out/share/postgresql --datarootdir=$out/share/postgresql --bindir=$out/bin --docdir=$doc/share/doc/${pname} --with-gdalconfig=${gdal}/bin/gdal-config --with-jsondir=${json_c.dev} --with-sfcgal"
+        configureFlags="--datadir=$out/share/postgresql --datarootdir=$out/share/postgresql --bindir=$out/bin --docdir=$doc/share/doc/${pname} --with-gdalconfig=${gdal}/bin/gdal-config --with-jsondir=${json_c.dev}"
 
         makeFlags="PERL=${perl}/bin/perl datadir=$out/share/postgresql pkglibdir=$out/lib bindir=$out/bin docdir=$doc/share/doc/${pname} PG_SHAREDIR=$out/share/postgresql PG_SHAREDIR=$out/share/postgresql"
       '';

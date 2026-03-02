@@ -1,24 +1,28 @@
 -- migrate:up
 
--- demote postgres user
-GRANT ALL ON DATABASE postgres TO postgres;
-GRANT ALL ON SCHEMA auth TO postgres;
-GRANT ALL ON SCHEMA extensions TO postgres;
-GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres;
-GRANT ALL ON ALL TABLES IN SCHEMA extensions TO postgres;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA extensions TO postgres;
-GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO postgres;
-GRANT ALL ON ALL ROUTINES IN SCHEMA extensions TO postgres;
-do $$
-begin
-  if exists (select from pg_namespace where nspname = 'storage') then
-    GRANT ALL ON SCHEMA storage TO postgres;
-    GRANT ALL ON ALL TABLES IN SCHEMA storage TO postgres;
-    GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO postgres;
-    GRANT ALL ON ALL ROUTINES IN SCHEMA storage TO postgres;
-  end if;
-end $$;
-ALTER ROLE postgres NOSUPERUSER CREATEDB CREATEROLE LOGIN REPLICATION BYPASSRLS;
+-- Demote the default postgres role (still keeps basic ownership but no superuser)
+REVOKE ALL PRIVILEGES ON DATABASE postgres FROM postgres;
+GRANT CONNECT, TEMP ON DATABASE postgres TO postgres;
 
+REVOKE ALL ON SCHEMA extensions FROM postgres;
+GRANT USAGE ON SCHEMA extensions TO postgres;
+
+REVOKE ALL ON ALL TABLES IN SCHEMA extensions FROM postgres;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA extensions TO postgres;
+
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA extensions FROM postgres;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA extensions TO postgres;
+
+REVOKE ALL ON ALL ROUTINES IN SCHEMA extensions FROM postgres;
+GRANT EXECUTE ON ALL ROUTINES IN SCHEMA extensions TO postgres;
+
+-- Strip dangerous capabilities
+ALTER ROLE postgres 
+  NOSUPERUSER 
+  NOCREATEDB 
+  NOCREATEROLE 
+  LOGIN 
+  REPLICATION 
+  BYPASSRLS;
+  
 -- migrate:down

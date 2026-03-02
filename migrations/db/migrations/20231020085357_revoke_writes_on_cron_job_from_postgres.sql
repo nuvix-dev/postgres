@@ -25,11 +25,11 @@ BEGIN
     alter default privileges in schema cron grant all on functions to postgres with grant option;
     alter default privileges in schema cron grant all on sequences to postgres with grant option;
 
-    alter default privileges for user supabase_admin in schema cron grant all
+    alter default privileges for user nuvix_admin in schema cron grant all
         on sequences to postgres with grant option;
-    alter default privileges for user supabase_admin in schema cron grant all
+    alter default privileges for user nuvix_admin in schema cron grant all
         on tables to postgres with grant option;
-    alter default privileges for user supabase_admin in schema cron grant all
+    alter default privileges for user nuvix_admin in schema cron grant all
         on functions to postgres with grant option;
 
     grant all privileges on all tables in schema cron to postgres with grant option;
@@ -40,7 +40,7 @@ END;
 $$;
 
 drop event trigger if exists issue_pg_cron_access;
-alter function extensions.grant_pg_cron_access owner to supabase_admin;
+alter function extensions.grant_pg_cron_access owner to nuvix_admin;
 CREATE EVENT TRIGGER issue_pg_cron_access ON ddl_command_end
          WHEN TAG IN ('CREATE EXTENSION')
    EXECUTE FUNCTION extensions.grant_pg_cron_access();

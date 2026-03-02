@@ -2,6 +2,7 @@
 
 -- Create schemas
 create schema if not exists system authorization nuvix_admin;
+create schema if not exists core authorization nuvix_app;
 
 revoke all on schema system from public;
 REVOKE ALL ON FUNCTION system.* FROM PUBLIC;

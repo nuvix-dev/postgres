@@ -3,6 +3,7 @@
 -- Set up realtime
 -- defaults to empty publication
 create publication nuvix_realtime;
+grant all on database postgres to nuvix_app;
 
 -- Extension namespacing
 create schema if not exists extensions;

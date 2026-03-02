@@ -2,75 +2,103 @@
 set -eu
 
 #######################################
-# Used by both ami and docker builds to initialise database schema.
-# Env vars:
-#   POSTGRES_DB        defaults to postgres
-#   POSTGRES_HOST      defaults to localhost
-#   POSTGRES_PORT      defaults to 5432
-#   POSTGRES_PASSWORD  defaults to ""
-#   NUVIX_ADMIN_PASSWORD defaults to POSTGRES_PASSWORD
-#   NUVIX_APP_USER_PASSWORD defaults to POSTGRES_PASSWORD
-#   USE_DBMATE         defaults to ""
-# Exit code:
-#   0 if migration succeeds, non-zero on error.
+# Database bootstrap for Nuvix.
+#
+# Authority model:
+#   - superuser: platform internal only (bootstrap phase)
+#   - nuvix_admin: governance + structural owner
+#   - nuvix_app: trusted backend runtime
+#   - postgres: project admin (demoted in migrations)
+#
+# All init + migrations run as nuvix_admin.
 #######################################
 
 export PGDATABASE="${POSTGRES_DB:-postgres}"
 export PGHOST="${POSTGRES_HOST:-localhost}"
 export PGPORT="${POSTGRES_PORT:-5432}"
 export PGPASSWORD="${POSTGRES_PASSWORD:-}"
+
 export NUVIX_ADMIN_PASSWORD="${NUVIX_ADMIN_PASSWORD:-$PGPASSWORD}"
 export NUVIX_APP_USER_PASSWORD="${NUVIX_APP_USER_PASSWORD:-$PGPASSWORD}"
 
-# if args are supplied, simply forward to dbmate
-connect="$NUVIX_ADMIN_PASSWORD@$PGHOST:$PGPORT/$PGDATABASE?sslmode=disable"
+db="$( cd -- "$( dirname -- "$0" )" > /dev/null 2>&1 && pwd )"
+
+#######################################
+# Forward args to dbmate if provided
+#######################################
 if [ "$#" -ne 0 ]; then
-    export DATABASE_URL="${DATABASE_URL:-postgres://nuvix_admin:$connect}"
+    export DATABASE_URL="postgres://nuvix_admin:${NUVIX_ADMIN_PASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}?sslmode=disable"
     exec dbmate "$@"
     exit 0
 fi
 
-db=$( cd -- "$( dirname -- "$0" )" > /dev/null 2>&1 && pwd )
-if [ -z "${USE_DBMATE:-}" ]; then
-    psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin <<EOSQL
-do \$\$
-begin
-  -- postgres role is pre-created during AMI build
-  if not exists (select from pg_roles where rolname = 'postgres') then
-    create role postgres superuser login password '$PGPASSWORD';
-    alter database postgres owner to postgres;
-  end if;
-end \$\$
-EOSQL
-    # run init scripts as postgres user
-    for sql in "$db"/init-scripts/*.sql; do
-        echo "$0: running $sql"
-        psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U postgres -f "$sql"
-    done
-    psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U postgres -c "ALTER USER nuvix_admin WITH PASSWORD '$NUVIX_ADMIN_PASSWORD'"
-    # run migrations as super user - postgres user demoted in post-setup
-    for sql in "$db"/migrations/*.sql; do
-        echo "$0: running $sql"
-        psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -f "$sql"
-    done
-else
-    psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin <<EOSQL
-  create role postgres superuser login password '$PGPASSWORD';
-  alter database postgres owner to postgres;
-EOSQL
-    # run init scripts as postgres user
-    DBMATE_MIGRATIONS_DIR="$db/init-scripts" DATABASE_URL="postgres://postgres:$connect" dbmate --no-dump-schema migrate
-    psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U postgres -c "ALTER USER nuvix_admin WITH PASSWORD '$NUVIX_ADMIN_PASSWORD'"
-    # run migrations as super user - postgres user demoted in post-setup
-    DBMATE_MIGRATIONS_DIR="$db/migrations" DATABASE_URL="postgres://nuvix_admin:$connect" dbmate --no-dump-schema migrate
-fi
+#######################################
+# Create required roles (bootstrap phase)
+# Must be executed by a superuser connection.
+#######################################
+psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc <<EOSQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nuvix_admin') THEN
+    CREATE ROLE nuvix_admin LOGIN PASSWORD '${NUVIX_ADMIN_PASSWORD}';
+  END IF;
 
-# run any post migration script to update role passwords
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nuvix_app') THEN
+    CREATE ROLE nuvix_app LOGIN PASSWORD '${NUVIX_APP_USER_PASSWORD}';
+  END IF;
+
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'postgres') THEN
+    CREATE ROLE postgres LOGIN PASSWORD '${PGPASSWORD}';
+  END IF;
+END
+\$\$;
+EOSQL
+
+#######################################
+# Temporarily elevate nuvix_admin for bootstrap
+#######################################
+psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc <<EOSQL
+ALTER ROLE nuvix_admin
+  WITH SUPERUSER
+       CREATEDB
+       CREATEROLE
+       REPLICATION
+       BYPASSRLS;
+EOSQL
+
+#######################################
+# Run init scripts as nuvix_admin
+#######################################
+for sql in "$db"/init-scripts/*.sql; do
+    echo "$0: running $sql"
+    psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -f "$sql"
+done
+
+#######################################
+# Run migrations as nuvix_admin
+#######################################
+for sql in "$db"/migrations/*.sql; do
+    echo "$0: running $sql"
+    psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -f "$sql"
+done
+
+#######################################
+# Optional post-init script
+#######################################
 postinit="/etc/postgresql.schema.sql"
 if [ -e "$postinit" ]; then
     echo "$0: running $postinit"
     psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -f "$postinit"
 fi
 
-# once done with everything, reset stats from init
-psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -c 'SELECT extensions.pg_stat_statements_reset(); SELECT pg_stat_reset();' || true
+#######################################
+# Reset stats
+#######################################
+psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin \
+  -c 'SELECT extensions.pg_stat_statements_reset(); SELECT pg_stat_reset();' || true
+
+#######################################
+# IMPORTANT:
+# postgres demotion and final privilege shaping
+# must occur inside migrations.
+#######################################

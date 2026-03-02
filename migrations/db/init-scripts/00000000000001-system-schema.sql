@@ -149,7 +149,8 @@ BEGIN
 
     RETURN new_schema_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = system, pg_catalog;
 GRANT EXECUTE ON FUNCTION system.create_schema(TEXT, TEXT, TEXT) TO postgres;
 
 -- System helper: apply baseline API grants to a schema
@@ -187,10 +188,14 @@ BEGIN
     EXECUTE format('GRANT ALL ON ALL ROUTINES IN SCHEMA %I TO nuvix_admin, nuvix_app;', p_schema);
 
     -- Defaults for nuvix_admin + nuvix_app
-    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON TABLES TO nuvix_admin, nuvix_app;', p_schema);
-    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON SEQUENCES TO nuvix_admin, nuvix_app;', p_schema);
-    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON FUNCTIONS TO nuvix_admin, nuvix_app;', p_schema);
-    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON ROUTINES TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON TABLES TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON SEQUENCES TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON FUNCTIONS TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON ROUTINES TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT ALL ON TABLES TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT ALL ON SEQUENCES TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT ALL ON FUNCTIONS TO nuvix_admin, nuvix_app;', p_schema);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT ALL ON ROUTINES TO nuvix_admin, nuvix_app;', p_schema);
 
     IF p_type = 'document' THEN
         -- postgres = read-only
@@ -201,10 +206,10 @@ BEGIN
         EXECUTE format('GRANT EXECUTE ON ALL ROUTINES IN SCHEMA %I TO postgres;', p_schema);
 
         -- Defaults for postgres
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO postgres;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON SEQUENCES TO postgres;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT EXECUTE ON FUNCTIONS TO postgres;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT EXECUTE ON ROUTINES TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT SELECT ON TABLES TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT SELECT ON SEQUENCES TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT EXECUTE ON FUNCTIONS TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE nuvix_app IN SCHEMA %I GRANT EXECUTE ON ROUTINES TO postgres;', p_schema);
 
         -- anon + authenticated + service_role: no access
 
@@ -217,10 +222,10 @@ BEGIN
         EXECUTE format('GRANT ALL ON ALL ROUTINES IN SCHEMA %I TO postgres;', p_schema);
 
         -- Defaults for postgres (ensures new tables/seqs auto-grant)
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON TABLES TO postgres;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON SEQUENCES TO postgres;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON FUNCTIONS TO postgres;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON ROUTINES TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON TABLES TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON SEQUENCES TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON FUNCTIONS TO postgres;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT ALL ON ROUTINES TO postgres;', p_schema);
 
         -- anon + authenticated + service_role = read/write (but no CREATE/DROP)
         EXECUTE format('GRANT USAGE ON SCHEMA %I TO anon, authenticated, service_role;', p_schema);
@@ -230,10 +235,10 @@ BEGIN
         EXECUTE format('GRANT EXECUTE ON ALL ROUTINES IN SCHEMA %I TO anon, authenticated, service_role;', p_schema);
 
         -- Defaults for anon + authenticated + service_role (new objects created by postgres)
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated, service_role;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;', p_schema);
-        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT EXECUTE ON ROUTINES TO anon, authenticated, service_role;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated, service_role;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;', p_schema);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I GRANT EXECUTE ON ROUTINES TO anon, authenticated, service_role;', p_schema);
     END IF;
 END;
 $$;
@@ -278,7 +283,8 @@ BEGIN
 
     RETURN OLD;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = system, pg_catalog;
 
 CREATE OR REPLACE FUNCTION system.apply_row_policies(tbl regclass)
 RETURNS void AS $$
@@ -969,6 +975,7 @@ CREATE OR REPLACE FUNCTION system.set_id_primary(tbl regclass, make_primary bool
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = system, pg_catalog
 AS $$
 DECLARE
     id_col text := '_id';
@@ -1017,6 +1024,7 @@ GRANT EXECUTE ON FUNCTION system.set_id_primary(regclass, boolean) TO postgres;
 CREATE OR REPLACE FUNCTION system.cleanup_schema()
 RETURNS event_trigger
 SECURITY DEFINER
+SET search_path = system, pg_catalog
 LANGUAGE plpgsql AS $$
 DECLARE
   obj record;

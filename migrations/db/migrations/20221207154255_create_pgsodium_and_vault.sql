@@ -16,6 +16,9 @@ BEGIN
     grant usage on schema vault to service_role;
     grant select, delete on vault.secrets, vault.decrypted_secrets to service_role;
     grant execute on function vault.create_secret, vault.update_secret, vault._crypto_aead_det_decrypt to service_role;
+        grant usage on schema vault to nuvix_app;
+    grant select, delete on vault.secrets, vault.decrypted_secrets to nuvix_app;
+    grant execute on function vault.create_secret, vault.update_secret, vault._crypto_aead_det_decrypt to nuvix_app;
   ELSE
     pgsodium_exists = (
       select count(*) = 1 
@@ -41,6 +44,9 @@ BEGIN
       grant execute on function pgsodium.crypto_aead_det_decrypt(bytea, bytea, uuid, bytea) to service_role;
       grant execute on function pgsodium.crypto_aead_det_encrypt(bytea, bytea, uuid, bytea) to service_role;
       grant execute on function pgsodium.crypto_aead_det_keygen to service_role;
+      grant execute on function pgsodium.crypto_aead_det_decrypt(bytea, bytea, uuid, bytea) to nuvix_app;
+      grant execute on function pgsodium.crypto_aead_det_encrypt(bytea, bytea, uuid, bytea) to nuvix_app;
+      grant execute on function pgsodium.crypto_aead_det_keygen to nuvix_app;
   
       IF vault_exists
       THEN

@@ -5,17 +5,6 @@ create schema if not exists system authorization nuvix_admin;
 create schema if not exists core authorization nuvix_app;
 
 revoke all on schema system from public;
-REVOKE ALL ON FUNCTION system.* FROM PUBLIC;
-
-grant usage on schema system to postgres;
-grant select on all tables in schema system to postgres;
-grant select on all sequences in schema system to postgres;
-
--- Ensure future tables/sequences/functions/routines also have correct privileges
-alter default privileges in schema system grant select on tables to postgres;
-alter default privileges in schema system grant select on sequences to postgres;
-alter default privileges in schema system grant execute on functions to postgres;
-alter default privileges in schema system grant execute on routines to postgres;
 
 grant usage on schema system to nuvix_app;
 grant select, insert, update, delete on all tables in schema system to nuvix_app;

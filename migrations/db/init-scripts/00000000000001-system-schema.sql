@@ -276,6 +276,100 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = system, pg_catalog;
 
+-- System helper: apply rls policies for managed schema
+CREATE OR REPLACE FUNCTION system.apply_table_policies(tbl regclass)
+RETURNS void AS $$
+DECLARE
+    perm text;
+    policy_name text;
+    sql text;
+BEGIN
+    -- Enable RLS always
+    EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY;', tbl);
+
+    -- Loop over CRUD permissions
+    FOR perm IN SELECT unnest(ARRAY['read','create','update','delete']) LOOP
+        policy_name := format('nx_table_%s', perm);
+
+        -- Drop existing
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %s;', policy_name, tbl);
+
+        -- Build correct clause depending on action
+        IF perm = 'read' THEN
+            sql := format($p$
+                CREATE POLICY %I ON %s
+                FOR SELECT
+                TO anon, authenticated
+                USING (
+                    EXISTS (
+                        SELECT 1 FROM %s_perms p
+                        WHERE p.row_id IS NULL
+                          AND p.permission = 'read'
+                          AND auth.roles() && p.roles
+                    )
+                );
+            $p$, policy_name, tbl, tbl);
+
+        ELSIF perm = 'create' THEN
+            sql := format($p$
+                CREATE POLICY %I ON %s
+                FOR INSERT
+                TO anon, authenticated
+                WITH CHECK (
+                    EXISTS (
+                        SELECT 1 FROM %s_perms p
+                        WHERE p.row_id IS NULL
+                          AND p.permission = 'create'
+                          AND auth.roles() && p.roles
+                    )
+                );
+            $p$, policy_name, tbl, tbl);
+
+        ELSIF perm = 'update' THEN
+            sql := format($p$
+                CREATE POLICY %I ON %s
+                FOR UPDATE
+                TO anon, authenticated
+                USING (
+                    EXISTS (
+                        SELECT 1 FROM %s_perms p
+                        WHERE p.row_id IS NULL
+                          AND p.permission = 'update'
+                          AND auth.roles() && p.roles
+                    )
+                )
+                WITH CHECK (
+                    EXISTS (
+                        SELECT 1 FROM %s_perms p
+                        WHERE p.row_id IS NULL
+                          AND p.permission = 'update'
+                          AND auth.roles() && p.roles
+                    )
+                );
+            $p$, policy_name, tbl, tbl, tbl);
+
+        ELSIF perm = 'delete' THEN
+            sql := format($p$
+                CREATE POLICY %I ON %s
+                FOR DELETE
+                TO anon, authenticated
+                USING (
+                    EXISTS (
+                        SELECT 1 FROM %s_perms p
+                        WHERE p.row_id IS NULL
+                          AND p.permission = 'delete'
+                          AND auth.roles() && p.roles
+                    )
+                );
+            $p$, policy_name, tbl, tbl);
+        END IF;
+
+        -- Execute create policy
+        EXECUTE sql;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION system.apply_row_policies(tbl regclass)
 RETURNS void AS $$
 DECLARE

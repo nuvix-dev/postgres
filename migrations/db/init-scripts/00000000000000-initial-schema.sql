@@ -16,6 +16,11 @@ create role anon                nologin noinherit;
 create role authenticated       nologin noinherit; -- "logged in" user: web_user, app_user, etc
 create role service_role        nologin noinherit bypassrls; -- allow developers to create JWT's that bypass their policies
 
+create user authenticator noinherit;
+grant anon              to authenticator;
+grant authenticated     to authenticator;
+grant service_role      to authenticator;
+grant nuvix_admin    to authenticator;
 
 -- Allow Extensions to be used in the API
 grant usage                     on schema extensions to nuvix_app, postgres, service_role;

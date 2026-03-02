@@ -74,6 +74,11 @@ if [ -z "${USE_DBMATE:-}" ]; then
         echo "$0: running $sql"
         psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -f "$sql"
     done
+
+    # Set password for authenticator role if it exists
+    if psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'authenticator'" | grep -q 1; then
+        psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -c "ALTER ROLE authenticator WITH PASSWORD '$PGPASSWORD';"
+    fi
 else
     echo "$0: Bootstrapping roles (postgres, nuvix_admin, nuvix_app)..."
     psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -c "$BOOTSTRAP_SQL"
@@ -83,6 +88,11 @@ else
 
     # Run migrations as nuvix_admin
     DBMATE_MIGRATIONS_DIR="$db/migrations" DATABASE_URL="postgres://nuvix_admin:$connect" dbmate --no-dump-schema migrate
+
+    # Set password for authenticator role if it exists
+    if psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'authenticator'" | grep -q 1; then
+        psql -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U nuvix_admin -c "ALTER ROLE authenticator WITH PASSWORD '$PGPASSWORD';"
+    fi
 fi
 
 # Run any post migration script to update role passwords if necessary

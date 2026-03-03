@@ -11,7 +11,10 @@ $$ language sql stable;
 
 -- Gets the User Roles from the request cookie
 create or replace function auth.roles() returns text[] as $$
-  select nullif(current_setting('request.auth.roles', true), '')::text[];
+  select coalesce(
+    nullif(current_setting('request.auth.roles', true), '')::text[],
+    '{}'::text[]
+  );
 $$ language sql stable;
 
 -- Gets the User email

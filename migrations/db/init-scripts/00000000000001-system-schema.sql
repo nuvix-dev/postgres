@@ -665,6 +665,7 @@ BEGIN
     EXECUTE format('REVOKE ALL ON SEQUENCE %I.%I FROM anon, authenticated', sname, tname || '_perms_id_seq');
     EXECUTE format('GRANT SELECT ON SEQUENCE %I.%I TO anon, authenticated', sname, tname || '_perms_id_seq');
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I.%I_perms TO postgres, service_role, nuvix_app', sname, tname);
+    EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %I.%I TO postgres, service_role, nuvix_app', sname, tname || '_perms_id_seq');
 
     PERFORM set_config('system.skip_perms_check', 'false', true);
 

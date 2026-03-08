@@ -75,6 +75,16 @@ CREATE INDEX idx_api_logs_request_id ON system.api_logs (request_id);
 CREATE INDEX idx_api_logs_status_ts ON system.api_logs (status, timestamp DESC);
 CREATE INDEX idx_api_logs_metadata ON system.api_logs USING GIN (metadata);
 
+create table if not exists system.migrations (
+    version bigint primary key,
+    name text not null,
+    checksum text not null,
+    executed_at timestamptz not null default now()
+);
+grant select, insert, update, delete
+on table system.migrations
+to postgres;
+
 alter user nuvix_admin SET search_path TO system, auth, extensions;
 
 -- Create functions 
@@ -1126,3 +1136,39 @@ DROP EVENT TRIGGER IF EXISTS cleanup_schema_trigger;
 CREATE EVENT TRIGGER cleanup_schema_trigger
 ON sql_drop
 EXECUTE FUNCTION system.cleanup_schema();
+
+create or replace function system.fix_managed_oid_links(target_schema text)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+    update system.tables t
+    set
+        oid        = subq.tbl_oid,
+        perms_oid  = subq.perms_oid,
+        updated_at = now()
+    from (
+        select
+            t2.id,
+            tbl.oid   as tbl_oid,
+            perms.oid as perms_oid
+        from system.tables t2
+        join system.schemas s
+            on t2.schema_id = s.id
+           and s.name = target_schema
+           and s.type = 'managed'
+        join pg_namespace ns
+            on ns.nspname = target_schema
+        left join pg_class tbl
+            on tbl.relnamespace = ns.oid
+           and tbl.relname      = t2.name
+           and tbl.relkind      = 'r'
+        left join pg_class perms
+            on perms.relnamespace = ns.oid
+           and perms.relname      = t2.name || '_perms'
+           and perms.relkind      = 'r'
+    ) subq
+    where t.id = subq.id;
+end;
+$$;

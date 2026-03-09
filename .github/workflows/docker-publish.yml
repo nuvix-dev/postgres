@@ -1,21 +1,22 @@
-name: Build and Publish Postgres (amd64)
+name: Build and Publish Postgres (Multi-Arch)
 
 on:
   push:
     tags:
-      - "v*"     # example: v17.0.0
+      - "v*" # example: v18.1
   workflow_dispatch:
 
 jobs:
   docker:
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -32,13 +33,15 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build and Push amd64 Image
+      - name: Build and Push Multi-Arch Image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile-18
           push: true
-          platforms: linux/amd64
+          provenance: false
+          platforms: linux/amd64,linux/arm64
           tags: |
-            nuvix/postgres:${{ steps.vars.outputs.version }}-amd64
-            nuvix/postgres:18-amd64
+            nuvix/postgres:${{ steps.vars.outputs.version }}
+            nuvix/postgres:18
+            nuvix/postgres:latest

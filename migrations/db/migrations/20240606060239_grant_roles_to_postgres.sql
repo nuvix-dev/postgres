@@ -46,4 +46,7 @@ GRANT EXECUTE ON FUNCTION apply_row_policies(regclass) TO postgres, service_role
 GRANT EXECUTE ON FUNCTION set_id_primary(regclass, boolean) TO postgres, service_role;
 GRANT EXECUTE ON FUNCTION system.fix_managed_oid_links(target_schema text) TO postgres, service_role;
 
+grant select, insert, update, delete
+on table system.migrations
+to postgres, service_role;
 -- migrate:down

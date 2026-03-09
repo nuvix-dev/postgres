@@ -1,4 +1,6 @@
-> **Notice:** This is a modified copy of [https://github.com/supabase/postgres](https://github.com/supabase/postgres)
+## 🙏 Acknowledgements
+
+This repository is a heavily modified fork of the incredible work done by the [Supabase Postgres](https://github.com/supabase/postgres) team. The Nix-based build architecture and extension compilation strategy in this repository are built upon their foundation. We are deeply grateful for their open-source contributions to the PostgreSQL ecosystem.
 
 # Getting Started with Nuvix Postgres
 
